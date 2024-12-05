@@ -1,95 +1,105 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 class DetailPage extends StatelessWidget {
-  final String head;
+  final String name;
+  final String imageUrl;
+  final String amiiboSeries;
   final String character;
   final String gameSeries;
-  final String title;
-  final String imageUrl;
-  final String name;
+  final String type;
+  final String head;
+  final String tail;
+  final Map<String, String> releaseDates;
 
-  const DetailPage(
-      {super.key,
-      required this.head,
-      required this.character,
-      required this.gameSeries,
-      required this.title,
-      required this.imageUrl,
-      required this.name});
-  Future<Map<String, dynamic>> fetchDetail() async {
-    final response = await http
-        .get(Uri.parse('https://www.amiiboapi.com/api/amiibo/$head/'));
-    if (response.statusCode == 200) {
-      return json.decode(response.body);
-    } else {
-      throw Exception('Failed to load detail');
-    }
-  }
+  const DetailPage({
+    Key? key,
+    required this.name,
+    required this.imageUrl,
+    required this.amiiboSeries,
+    required this.character,
+    required this.gameSeries,
+    required this.type,
+    required this.head,
+    required this.tail,
+    required this.releaseDates,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('$head Details')),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: fetchDetail(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else {
-            final data = snapshot.data!;
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Menampilkan gambar
-                  Image.network(data['image'] ?? '', fit: BoxFit.cover),
-
-                  const SizedBox(height: 16),
-                  // Menampilkan judul
-                  Text(
-                    data['amiiboSeries'] ?? 'No Title',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Menampilkan nama
-                  Text(
-                    'Name: ${data['name'] ?? 'Unknown'}',
-                    style: const TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  // Menampilkan character
-                  Text(
-                    'Character: ${data['character'] ?? 'Unknown'}',
-                    style: const TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  // Menampilkan game series
-                  Text(
-                    'Game Series: ${data['gameSeries'] ?? 'Unknown'}',
-                    style: const TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  // Floating action button yang dapat diubah fungsinya
-                  FloatingActionButton(
-                    onPressed: () {
-                      // Fungsi lainnya sesuai kebutuhan
-                      // Contoh: navigasi ke link eksternal atau lakukan aksi lain
-                    },
-                    child: const Icon(Icons.open_in_browser),
-                  ),
-                ],
+      appBar: AppBar(
+        title: Text(name),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Image.network(
+                imageUrl,
+                width: 200, 
+                height: 200,
+                fit: BoxFit.contain, 
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(Icons.broken_image, size: 100);
+                },
               ),
-            );
-          }
-        },
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildDetailsRow('Amiibo Series', amiiboSeries),
+            _buildDetailsRow('Character', character),
+            _buildDetailsRow('Game Series', gameSeries),
+            _buildDetailsRow('Type', type),
+            _buildDetailsRow('Head', head),
+            _buildDetailsRow('Tail', tail),
+            const SizedBox(height: 16),
+            const Text(
+              'Release Dates:',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ...releaseDates.entries.map((entry) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      entry.key,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(entry.value),
+                  ],
+                ),
+              );
+            }).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailsRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Flexible(child: Text(value, textAlign: TextAlign.right)),
+        ],
       ),
     );
   }

@@ -1,151 +1,160 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:nitendo_amiibo_app/pages/detail_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'detail_page.dart';
+import 'favorite_screen.dart';
 
 class HomePage extends StatefulWidget {
-  final String head;
-  final String character;
-  final String gameSeries;
-  final String title;
-  final String imageUrl;
-  final String name;
-
-  const HomePage(
-      {super.key,
-      required this.head,
-      required this.character,
-      required this.gameSeries,
-      required this.title,
-      required this.imageUrl,
-      required this.name});
+  const HomePage({Key? key}) : super(key: key);
 
   @override
-  _HomePageState createState() => _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  late Future<List> _data;
+  late Future<List<dynamic>> _data;
+  int _selectedIndex = 0;
+  List<String> favorites = [];
 
-  Future<List> fetchData() async {
-    final response = await http
-        .get(Uri.parse('https://www.amiiboapi.com/api/amiibo/${widget.head}'));
+  Future<List<dynamic>> fetchData() async {
+    final response =
+        await http.get(Uri.parse('https://www.amiiboapi.com/api/amiibo/'));
     if (response.statusCode == 200) {
-      return json.decode(response.body)['results'];
+      return json.decode(response.body)['amiibo'];
     } else {
       throw Exception('Failed to load data');
     }
+  }
+
+  Future<void> loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      favorites = prefs.getStringList('favorites') ?? [];
+    });
+  }
+
+  Future<void> toggleFavorite(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (favorites.contains(name)) {
+      favorites.remove(name);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$name removed from favorites')),
+      );
+    } else {
+      favorites.add(name);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$name added to favorites')),
+      );
+    }
+    await prefs.setStringList('favorites', favorites);
+    setState(() {});
   }
 
   @override
   void initState() {
     super.initState();
     _data = fetchData();
+    loadFavorites();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text('Nitendo Amiibo App'),
-          centerTitle: true,
-        ),
-        body: FutureBuilder<List>(
-          future: _data,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            } else if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            } else {
-              return ListView.builder(
-                itemCount: snapshot.data!.length,
-                itemBuilder: (context, index) {
-                  final item = snapshot.data![index];
-                  return _buildListCard(
-                    context,
-                    title: item['amiiboSeries'],
-                    imageUrl: item['image'],
-                    name: item['name'],
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DetailPage(
-                          head: '',
-                          character: '',
-                          gameSeries: '',
-                          title: '',
-                          imageUrl: '',
-                          name: '',
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              );
-            }
-          },
-        ),
+    final pages = [
+      _buildHomeScreen(),
+      FavoriteScreen(onUpdate: loadFavorites), 
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Nintendo Amiibo App'),
+        centerTitle: true,
+      ),
+      body: pages[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite),
+            label: 'Favorites',
+          ),
+        ],
+        currentIndex: _selectedIndex,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
       ),
     );
   }
 
-  Widget _buildListCard(BuildContext context,
-      {required String title,
-      required String imageUrl,
-      required String name,
-      required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        elevation: 5,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        child: Row(
-          children: [
-            // Image Thumbnail
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(15),
-                bottomLeft: Radius.circular(15),
-              ),
-              child: Image.network(
-                imageUrl,
-                width: 100,
-                height: 100,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    const Icon(Icons.broken_image, size: 100),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(10.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+  Widget _buildHomeScreen() {
+    return FutureBuilder<List<dynamic>>(
+      future: _data,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        } else if (snapshot.data == null || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No data available.'));
+        } else {
+          return ListView.builder(
+            itemCount: snapshot.data!.length,
+            itemBuilder: (context, index) {
+              final item = snapshot.data![index];
+              final isFavorite = favorites.contains(item['name']);
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ListTile(
+                  leading: Image.network(
+                    item['image'],
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Icon(Icons.broken_image),
+                  ),
+                  title: Text(item['name']),
+                  subtitle: Text(item['gameSeries']),
+                  trailing: IconButton(
+                    icon: Icon(
+                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: isFavorite ? Colors.red : null,
+                    ),
+                    onPressed: () => toggleFavorite(item['name']),
+                  ),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DetailPage(
+                        name: item['name'],
+                        imageUrl: item['image'],
+                        amiiboSeries: item['amiiboSeries'] ?? 'Unknown',
+                        character: item['character'] ?? 'Unknown',
+                        gameSeries: item['gameSeries'] ?? 'Unknown',
+                        type: item['type'] ?? 'Unknown',
+                        head: item['head'] ?? 'Unknown',
+                        tail: item['tail'] ?? 'Unknown',
+                        releaseDates: {
+                          'Australia': item['release']['au'] ?? 'N/A',
+                          'Europe': item['release']['eu'] ?? 'N/A',
+                          'Japan': item['release']['jp'] ?? 'N/A',
+                          'North America': item['release']['na'] ?? 'N/A',
+                        },
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Source: $name',
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
+              );
+            },
+          );
+        }
+      },
     );
   }
 }
